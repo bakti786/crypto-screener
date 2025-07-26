@@ -20,23 +20,49 @@ def get_dex_data(limit: int = 30) -> pd.DataFrame:
     pandas.DataFrame
         DataFrame with pair information such as symbol, price and volume.
     """
-    url = "https://api.dexscreener.com/latest/dex/pairs"
+    url = "https://api.dexscreener.com/stats/trending"
     columns = ["pair", "price", "volume", "chain", "dex", "url"]
     try:
         res = requests.get(url, timeout=10)
         res.raise_for_status()
         data = res.json()
-        if "pairs" not in data:
+        # newer API may nest trending data under various keys
+        raw_pairs = None
+        for key in ("pairs", "trending", "trendingPairs", "trendingPools"):
+            if key in data:
+                raw_pairs = data[key]
+                break
+        # sometimes the payload is nested one level deeper
+        if raw_pairs is None:
+            for outer in ("data", "stats"):
+                section = data.get(outer)
+                if isinstance(section, dict):
+                    for key in ("pairs", "trending", "trendingPairs", "trendingPools"):
+                        if key in section:
+                            raw_pairs = section[key]
+                            break
+                if raw_pairs is not None:
+                    break
+        if not raw_pairs:
             st.error("Data tidak tersedia dari DexScreener. Coba lagi nanti.")
             return pd.DataFrame(columns=columns)
-        raw_pairs = data["pairs"][:limit]
+        raw_pairs = raw_pairs[:limit]
         rows = []
         for d in raw_pairs:
+            volume = 0.0
+            vol_field = d.get("volume")
+            if isinstance(vol_field, dict):
+                volume = float(vol_field.get("h24") or vol_field.get("usd24h") or 0)
+            else:
+                volume = float(d.get("volumeH24") or d.get("volumeUsd24h") or 0)
+
             rows.append(
                 {
-                    "pair": d["baseToken"]["symbol"] + "/" + d["quoteToken"]["symbol"],
+                    "pair": d.get("baseToken", {}).get("symbol", "")
+                    + "/"
+                    + d.get("quoteToken", {}).get("symbol", ""),
                     "price": float(d.get("priceUsd") or 0),
-                    "volume": float(d.get("volume", {}).get("h24") or 0),
+                    "volume": volume,
                     "chain": d.get("chainId"),
                     "dex": d.get("dexId"),
                     "url": d.get("url"),
