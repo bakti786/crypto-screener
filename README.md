@@ -22,8 +22,9 @@ pip install -r requirements.txt
 
 ## Streamlit UI
 
-The repository also includes a simple Streamlit UI that fetches data from Dex Screener and highlights new trend signals. Run it with:
+The repository also includes a simple Streamlit UI that fetches trending data from CoinGecko rather than DexScreener and highlights new trend signals. Run it with:
 
 ```bash
 streamlit run screener_ui.py
 ```
+Trending coins are retrieved from the [CoinGecko trending endpoint](https://api.coingecko.com/api/v3/search/trending). You can visit that URL to see the raw JSON response.
