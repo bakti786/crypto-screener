@@ -8,13 +8,14 @@ st.title("\U0001F9E0 DEX Crypto Screener – Supertrend Style")
 @st.cache_data
 def get_dex_data(limit=30):
     url = "https://api.dexscreener.com/latest/dex/pairs"
+    columns = ['pair', 'price', 'volume', 'chain', 'dex', 'url']
     try:
         res = requests.get(url, timeout=10)
         res.raise_for_status()
         data = res.json()
         if 'pairs' not in data:
             st.error("Data tidak tersedia dari DexScreener. Coba lagi nanti.")
-            return pd.DataFrame()
+            return pd.DataFrame(columns=columns)
         raw_pairs = data['pairs'][:limit]
         rows = []
         for d in raw_pairs:
@@ -26,15 +27,21 @@ def get_dex_data(limit=30):
                 'dex': d['dexId'],
                 'url': d['url']
             })
-        return pd.DataFrame(rows)
+        return pd.DataFrame(rows, columns=columns)
     except requests.exceptions.RequestException as e:
         st.error(f"Gagal mengambil data dari DEX Screener: {e}")
-        return pd.DataFrame()
+        return pd.DataFrame(columns=columns)
     except ValueError:
         st.error("Gagal memproses data JSON. Mungkin API sedang bermasalah.")
-        return pd.DataFrame()
+        return pd.DataFrame(columns=columns)
 
 def compute_supertrend(df, atr_period=10, atr_mult=1.5):
+    if df.empty:
+        df = df.copy()
+        df['trend'] = pd.Series(dtype=int)
+        df['signal'] = pd.Series(dtype=float)
+        return df
+
     df['high'] = df['price'] * 1.02
     df['low'] = df['price'] * 0.98
     df['close'] = df['price']
