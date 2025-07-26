@@ -7,70 +7,36 @@ st.title("🧠 DEX Crypto Screener – Supertrend Style")
 
 
 @st.cache_data(show_spinner=False)
-def get_dex_data(limit: int = 30) -> pd.DataFrame:
-    """Fetch recent pair data from Dexscreener.
-
-    Parameters
-    ----------
-    limit : int, optional
-        Number of rows to return, by default 30.
+def get_coingecko_trending() -> pd.DataFrame:
+    """Fetch trending coins from CoinGecko.
 
     Returns
     -------
     pandas.DataFrame
-        DataFrame with pair information such as symbol, price and volume.
+        DataFrame with coin name, symbol, price (BTC) and a CoinGecko URL.
     """
-    url = "https://api.dexscreener.com/stats/trending"
-    columns = ["pair", "price", "volume", "chain", "dex", "url"]
+    url = "https://api.coingecko.com/api/v3/search/trending"
+    columns = ["name", "symbol", "price", "url"]
     try:
         res = requests.get(url, timeout=10)
         res.raise_for_status()
         data = res.json()
-        # newer API may nest trending data under various keys
-        raw_pairs = None
-        for key in ("pairs", "trending", "trendingPairs", "trendingPools"):
-            if key in data:
-                raw_pairs = data[key]
-                break
-        # sometimes the payload is nested one level deeper
-        if raw_pairs is None:
-            for outer in ("data", "stats"):
-                section = data.get(outer)
-                if isinstance(section, dict):
-                    for key in ("pairs", "trending", "trendingPairs", "trendingPools"):
-                        if key in section:
-                            raw_pairs = section[key]
-                            break
-                if raw_pairs is not None:
-                    break
-        if not raw_pairs:
-            st.error("Data tidak tersedia dari DexScreener. Coba lagi nanti.")
-            return pd.DataFrame(columns=columns)
-        raw_pairs = raw_pairs[:limit]
+        coins = data.get("coins", [])
         rows = []
-        for d in raw_pairs:
-            volume = 0.0
-            vol_field = d.get("volume")
-            if isinstance(vol_field, dict):
-                volume = float(vol_field.get("h24") or vol_field.get("usd24h") or 0)
-            else:
-                volume = float(d.get("volumeH24") or d.get("volumeUsd24h") or 0)
-
+        for entry in coins:
+            item = entry.get("item", {})
+            coin_id = item.get("id")
             rows.append(
                 {
-                    "pair": d.get("baseToken", {}).get("symbol", "")
-                    + "/"
-                    + d.get("quoteToken", {}).get("symbol", ""),
-                    "price": float(d.get("priceUsd") or 0),
-                    "volume": volume,
-                    "chain": d.get("chainId"),
-                    "dex": d.get("dexId"),
-                    "url": d.get("url"),
+                    "name": item.get("name"),
+                    "symbol": item.get("symbol"),
+                    "price": float(item.get("price_btc") or 0),
+                    "url": f"https://www.coingecko.com/en/coins/{coin_id}" if coin_id else None,
                 }
             )
         return pd.DataFrame(rows, columns=columns)
     except requests.exceptions.RequestException as exc:
-        st.error(f"Gagal mengambil data dari DEX Screener: {exc}")
+        st.error(f"Gagal mengambil data dari CoinGecko: {exc}")
         return pd.DataFrame(columns=columns)
     except ValueError:
         st.error("Gagal memproses data JSON. Mungkin API sedang bermasalah.")
@@ -138,12 +104,10 @@ def supertrend_signals(df: pd.DataFrame, atr_period: int = 10, atr_mult: float =
 if __name__ == "__main__":
     refresh = st.button("Refresh Data")
     if refresh:
-        get_dex_data.clear()
-    data = get_dex_data()
+        get_coingecko_trending.clear()
+    data = get_coingecko_trending()
 
-    min_volume = st.slider("Minimum Volume (24h)", 0.0, 1_000_000.0, 0.0, step=10.0)
     signals = supertrend_signals(data)
-    signals = signals[signals["volume"] >= min_volume]
 
     st.subheader("🔥 New Trend Signals Today")
-    st.dataframe(signals[["pair", "price", "trend", "signal", "volume", "url"]])
+    st.dataframe(signals[["name", "symbol", "price", "trend", "signal", "url"]])
