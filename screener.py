@@ -19,8 +19,13 @@ def fetch_market_data(vs_currency='usd', per_page=10, page=1):
     return data
 
 
-def screen_by_price_change(data, pct_threshold=5.0):
-    """Filter coins whose 24h change percentage is above pct_threshold."""
+def screen_by_price_change(data, pct_threshold=2.0):
+    """Filter coins whose 24h change percentage is above ``pct_threshold``.
+
+    The default threshold of ``2.0`` is intentionally low so the screener
+    returns more coins when market conditions are quiet. Increase the value
+    if you want a stricter filter.
+    """
     screened = []
     for coin in data:
         change = coin.get('price_change_percentage_24h')
@@ -33,7 +38,12 @@ def main():
     import argparse
     parser = argparse.ArgumentParser(description='Simple crypto screener using CoinGecko API')
     parser.add_argument('--per-page', type=int, default=10, help='Number of coins to fetch')
-    parser.add_argument('--threshold', type=float, default=5.0, help='24h percentage change threshold')
+    parser.add_argument(
+        '--threshold',
+        type=float,
+        default=2.0,
+        help='24h percentage change threshold (default: 2.0)'
+    )
     args = parser.parse_args()
 
     data = fetch_market_data(per_page=args.per_page)
